@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem POS & Paparan Antrean Percuma</title>
+    <!-- Tailwind CSS untuk Reka Bentuk Pantas -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .pulse-ready {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800">
+
+    <!-- Supabase Configuration Overlay -->
+    <div id="config-screen" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full">
+            <h2 class="text-xl font-bold mb-2 text-slate-900">Setup Supabase Anda (Percuma)</h2>
+            <p class="text-sm text-slate-600 mb-4">Sila masukkan URL dan Kunci Anon API dari dashboard akaun Supabase anda untuk mengaktifkan fungsi simpanan data.</p>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Project URL</label>
+                    <input type="text" id="sb-url" placeholder="https://xyz.supabase.co" class="w-full p-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Anon API Key</label>
+                    <input type="password" id="sb-key" placeholder="eyJhbGciOi..." class="w-full p-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button onclick="saveConfig()" class="w-full bg-blue-600 text-white font-medium p-2.5 rounded-lg hover:bg-blue-700 transition">
+                    Sambung & Mula Sistem
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div class="min-h-screen flex flex-col">
+        <!-- Navigation Header -->
+        <header class="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2 rounded-xl font-bold tracking-wider text-xl">POS</div>
+                <h1 class="text-lg font-bold text-slate-900">Sistem Jualan & Pickup Display</h1>
+            </div>
+            <!-- Tab Switcher -->
+            <div class="flex bg-slate-200 p-1 rounded-xl">
+                <button onclick="switchTab('kasir')" id="btn-kasir" class="px-4 py-2 text-sm font-semibold rounded-lg bg-white text-blue-600 shadow-sm transition">
+                    🛒 KASIR / POS
+                </button>
+                <button onclick="switchTab('display')" id="btn-display" class="px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition">
+                    📺 PICKUP DISPLAY (TV)
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6">
+            
+            <!-- SECTION 1: TAB KASIR & DAPUR -->
+            <div id="tab-kasir" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Panel Tambah Pesanan -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                    <h2 class="text-lg font-bold mb-4 text-slate-900 flex items-center gap-2">🟢 Entry Pesanan Baru</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Nombor Giliran (Saranan: Automatik)</label>
+                            <input type="text" id="order-input" class="w-full p-3 border rounded-xl text-lg font-bold bg-slate-50" readonly>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="generateNextNumber()" class="col-span-2 py-2.5 bg-slate-200 hover:bg-slate-300 font-medium rounded-lg text-xs transition">
+                                🔄 Generate Nombor Seterusnya
+                            </button>
+                        </div>
+                        <button onclick="createOrder()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl shadow-md transition-all">
+                            Hantar ke Dapur / Proses
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel Kawalan Dapur / Status Pengurusan -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+                    <h2 class="text-lg font-bold mb-4 text-slate-900">👨‍🍳 Senarai Kawalan Proses Pesanan</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-200 text-xs font-semibold text-slate-400 uppercase bg-slate-50">
+                                    <th class="p-3">No. Pesanan</th>
+                                    <th class="p-3">Masa Masuk</th>
+                                    <th class="p-3">Status Semasa</th>
+                                    <th class="p-3 text-right">Tindakan Kawalan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-table-body" class="divide-y divide-slate-100 text-sm">
+                                <tr>
+                                    <td colspan="4" class="p-4 text-center text-slate-400">Memuatkan data...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: TAB PICKUP DISPLAY (TAMPILAN TV) -->
+            <div id="tab-display" class="hidden h-full">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 min-h-[70vh]">
+                    
+                    <!-- Ruang Penyediaan (Preparing) -->
+                    <div class="bg-amber-50 border border-amber-200 rounded-3xl p-6 flex flex-col">
+                        <div class="flex justify-between items-center border-b-4 border-amber-400 pb-3 mb-4">
+                            <h2 class="text-2xl font-black text-amber-800 tracking-wide uppercase">👨‍🍳 Sedang Disiapkan</h2>
+                            <span class="bg-amber-200 text-amber-900 font-bold px-3 py-1 rounded-full text-sm">PREPARING</span>
+                        </div>
+                        <div id="display-preparing" class="flex flex-wrap gap-4 content-start flex-1 overflow-y-auto">
+                            <!-- Contoh Dynamic Item -->
+                        </div>
+                    </div>
+
+                    <!-- Ruang Siap Sedia (Ready for Pickup) -->
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-3xl p-6 flex flex-col">
+                        <div class="flex justify-between items-center border-b-4 border-emerald-400 pb-3 mb-4">
+                            <h2 class="text-2xl font-black text-emerald-800 tracking-wide uppercase">🔔 Sila Ambil Pesanan</h2>
+                            <span class="bg-emerald-200 text-emerald-900 font-bold px-3 py-1 rounded-full text-sm">READY</span>
+                        </div>
+                        <div id="display-ready" class="flex flex-wrap gap-4 content-start flex-1 overflow-y-auto">
+                            <!-- Contoh Dynamic Item -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Import JavaScript Supabase Direct Integration via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        let supabaseClient = null;
+        let nextOrderNumber = 101;
+
+        // Semak sekiranya konfigurasi telah wujud dalam browser storage
+        window.onload = function() {
+            const savedUrl = localStorage.getItem('sb_url');
+            const savedKey = localStorage.getItem('sb_key');
+            if (savedUrl && savedKey) {
+                document.getElementById('sb-url').value = savedUrl;
+                document.getElementById('sb-key').value = savedKey;
+                initSupabase(savedUrl, savedKey);
+            }
+            generateNextNumber();
+        };
+
+        function saveConfig() {
+            const url = document.getElementById('sb-url').value.trim();
+            const key = document.getElementById('sb-key').value.trim();
+            if(!url || !key) return alert('Sila isi kedua-dua URL dan Key');
+            
+            localStorage.setItem('sb_url', url);
+            localStorage.setItem('sb_key', key);
+            initSupabase(url, key);
+        }
+
+        function initSupabase(url, key) {
+            supabaseClient = supabase.createClient(url, key);
+            document.getElementById('config-screen').classList.add('hidden');
+            
+            // Ambil data pertama kali & mulakan live stream data
+            fetchOrders();
+            subscribeRealtime();
+        }
+
+        // Generate susunan nombor pesanan automatik
+        function generateNextNumber() {
+            document.getElementById('order-input').value = 'A-' + nextOrderNumber;
+        }
+
+        // Navigasi penukaran paparan tab (Kasir / TV Display)
+        function switchTab(tab) {
+            if (tab === 'kasir') {
+                document.getElementById('tab-kasir').classList.remove('hidden');
+                document.getElementById('tab-display').classList.add('hidden');
+                document.getElementById('btn-kasir').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-white text-blue-600 shadow-sm transition";
+                document.getElementById('btn-display').className = "px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition";
+            } else {
+                document.getElementById('tab-kasir').classList.add('hidden');
+                document.getElementById('tab-display').classList.remove('hidden');
+                document.getElementById('btn-display').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-white text-blue-600 shadow-sm transition";
+                document.getElementById('btn-kasir').className = "px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition";
+            }
+        }
+
+        // SIMPAN PESANAN: Memasukkan rekod ke dalam jadual Supabase
+        async function createOrder() {
+            if(!supabaseClient) return;
+            const orderNum = document.getElementById('order-input').value;
+            
+            const { data, error } = await supabaseClient
+                .from('orders')
+                .insert([{ order_number: orderNum, status: 'preparing' }]);
+
+            if (error) {
+                alert('Gagal simpan: ' + error.message);
+            } else {
+                nextOrderNumber++;
+                generateNextNumber();
+                fetchOrders();
+            }
+        }
+
+        // AMBIL DATA: Paparkan isi jadual terkini ke senarai menu dashboard
+        async function fetchOrders() {
+            if(!supabaseClient) return;
+            const { data: orders, error } = await supabaseClient
+                .from('orders')
+                .select('*')
+                .in('status', ['preparing', 'ready'])
+                .order('created_at', { ascending: true });
+
+            if (error) return console.error(error);
+            renderTables(orders);
+        }
+
+        // TUKAR STATUS: Berfungsi menukar mod pesanan dari dashboard kasir/dapur
+        async function updateStatus(id, newStatus) {
+            if(!supabaseClient) return;
+            const { error } = await supabaseClient
+                .from('orders')
+                .update({ status: newStatus })
+                .eq('id', id);
+
+            if (error) alert('Gagal kemaskini status');
+            fetchOrders();
+        }
+
+        // REALTIME STREAMING: Mengesan sekiranya ada penukaran pada pangkalan data secara live
+        function subscribeRealtime() {
+            supabaseClient
+                .channel('schema-db-changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+                    fetchOrders();
+                })
+                .subscribe();
+        }
+
+        // KEMASKINI UI: Proses pemetaan data ke dalam struktur HTML
+        function renderTables(orders) {
+            const tableBody = document.getElementById('admin-table-body');
+            const prepDisplay = document.getElementById('display-preparing');
+            const readyDisplay = document.getElementById('display-ready');
+
+            // Kosongkan paparan sedia ada sebelum dimuatkan semula
+            tableBody.innerHTML = '';
+            prepDisplay.innerHTML = '';
+            readyDisplay.innerHTML = '';
+
+            if (orders.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Tiada pesanan aktif waktu ini.</td></tr>`;
+            }
+
+            orders.forEach(order => {
+                const time = new Date(order.created_at).toLocaleTimeString('ms-MY', {hour: '2-digit', minute:'2-digit'});
+                
+                // 1. Render Jadual Kasir/Dapur
+                let actionButton = '';
+                if(order.status === 'preparing') {
+                    actionButton = `<button onclick="updateStatus(${order.id}, 'ready')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition">🔔 Siap / Panggil</button>`;
+                } else if(order.status === 'ready') {
+                    actionButton = `<button onclick="updateStatus(${order.id}, 'completed')" class="bg-slate-600 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition">✓ Selesai Ambil</button>`;
+                }
+
+                const statusBadge = order.status === 'preparing' 
+                    ? `<span class="px-2 py-1 rounded-md text-xs font-medium bg-amber-100 text-amber-800">Sedang Disiap</span>`
+                    : `<span class="px-2 py-1 rounded-md text-xs font-medium bg-emerald-100 text-emerald-800">Sedia Dikutip</span>`;
+
+                tableBody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-3 font-bold text-slate-900">${order.order_number}</td>
+                        <td class="p-3 text-slate-500">${time}</td>
+                        <td class="p-3">${statusBadge}</td>
+                        <td class="p-3 text-right">${actionButton}</td>
+                    </tr>
+                `;
+
+                // 2. Render Paparan Antrean TV (Mengikut Kategori Status)
+                if(order.status === 'preparing') {
+                    prepDisplay.innerHTML += `
+                        <div class="bg-white text-slate-800 px-6 py-4 rounded-2xl shadow-xs border border-amber-200 text-2xl font-black tracking-wider min-w-[100px] text-center">
+                            ${order.order_number}
+                        </div>
+                    `;
+                } else if(order.status === 'ready') {
+                    readyDisplay.innerHTML += `
+                        <div class="bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-md text-2xl font-black tracking-wider min-w-[100px] text-center pulse-ready border-2 border-emerald-400">
+                            ${order.order_number}
+                        </div>
+                    `;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
