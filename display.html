@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pickup Display (TV)</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Tailwind CSS v3 CDN (Dipercayai & Stabil untuk Smart TV) -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
@@ -16,9 +16,9 @@
         }
     </style>
 </head>
-<body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col p-6">
+<body style="background-color: #0f172a; color: #ffffff;" class="bg-slate-900 text-white font-sans min-h-screen flex flex-col p-6">
 
-    <!-- Supabase Config Overlay (Jika belum diset) -->
+    <!-- Supabase Config Overlay -->
     <div id="config-screen" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
         <div class="bg-slate-800 text-white p-6 rounded-2xl shadow-xl max-w-md w-full border border-slate-700">
             <h2 class="text-xl font-bold mb-2">Setup TV Display (Supabase)</h2>
@@ -74,21 +74,21 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        let supabaseClient = null;
+        var supabaseClient = null;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const savedUrl = localStorage.getItem('sb_url');
-            const savedKey = localStorage.getItem('sb_key');
+        window.onload = function() {
+            var savedUrl = localStorage.getItem('sb_url');
+            var savedKey = localStorage.getItem('sb_key');
             if (savedUrl && savedKey) {
                 document.getElementById('sb-url').value = savedUrl;
                 document.getElementById('sb-key').value = savedKey;
                 initSupabase(savedUrl, savedKey);
             }
-        });
+        };
 
         function saveConfig() {
-            const url = document.getElementById('sb-url').value.trim();
-            const key = document.getElementById('sb-key').value.trim();
+            var url = document.getElementById('sb-url').value.trim();
+            var key = document.getElementById('sb-key').value.trim();
             if(!url || !key) return alert('Sila isi URL dan Key');
             
             localStorage.setItem('sb_url', url);
@@ -97,54 +97,57 @@
         }
 
         function initSupabase(url, key) {
-            supabaseClient = supabase.createClient(url, key);
-            document.getElementById('config-screen').classList.add('hidden');
-            
-            fetchOrders();
-            subscribeRealtime();
+            try {
+                supabaseClient = supabase.createClient(url, key);
+                document.getElementById('config-screen').classList.add('hidden');
+                
+                fetchOrders();
+                subscribeRealtime();
+            } catch(e) {
+                alert('Ralat Supabase: ' + e.message);
+            }
         }
 
         async function fetchOrders() {
             if(!supabaseClient) return;
-            const { data: orders, error } = await supabaseClient
+            var res = await supabaseClient
                 .from('orders')
                 .select('*')
                 .in('status', ['preparing', 'ready'])
                 .order('created_at', { ascending: true });
 
-            if (error) return console.error(error);
-            renderDisplay(orders);
+            if (res.error) return console.error(res.error);
+            renderDisplay(res.data || []);
         }
 
         function subscribeRealtime() {
+            if(!supabaseClient) return;
             supabaseClient
                 .channel('schema-db-changes')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, function(payload) {
                     fetchOrders();
                 })
                 .subscribe();
         }
 
         function renderDisplay(orders) {
-            const prepDisplay = document.getElementById('display-preparing');
-            const readyDisplay = document.getElementById('display-ready');
+            var prepDisplay = document.getElementById('display-preparing');
+            var readyDisplay = document.getElementById('display-ready');
 
             prepDisplay.innerHTML = '';
             readyDisplay.innerHTML = '';
 
-            orders.forEach(order => {
+            orders.forEach(function(order) {
                 if(order.status === 'preparing') {
-                    prepDisplay.innerHTML += `
-                        <div class="bg-slate-700 text-amber-300 px-8 py-5 rounded-2xl shadow-md border border-amber-500/30 text-4xl font-black tracking-wider min-w-[120px] text-center">
-                            ${order.order_number}
-                        </div>
-                    `;
+                    prepDisplay.innerHTML += 
+                        '<div class="bg-slate-700 text-amber-300 px-8 py-5 rounded-2xl shadow-md border border-amber-500/30 text-4xl font-black tracking-wider min-w-[120px] text-center">' +
+                            order.order_number +
+                        '</div>';
                 } else if(order.status === 'ready') {
-                    readyDisplay.innerHTML += `
-                        <div class="bg-emerald-600 text-white px-8 py-5 rounded-2xl shadow-xl text-4xl font-black tracking-wider min-w-[120px] text-center pulse-ready border-2 border-emerald-400">
-                            ${order.order_number}
-                        </div>
-                    `;
+                    readyDisplay.innerHTML += 
+                        '<div class="bg-emerald-600 text-white px-8 py-5 rounded-2xl shadow-xl text-4xl font-black tracking-wider min-w-[120px] text-center pulse-ready border-2 border-emerald-400">' +
+                            order.order_number +
+                        '</div>';
                 }
             });
         }
