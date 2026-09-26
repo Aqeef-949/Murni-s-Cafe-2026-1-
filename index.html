@@ -116,7 +116,7 @@
                             <span class="bg-amber-200 text-amber-900 font-bold px-3 py-1 rounded-full text-sm">PREPARING</span>
                         </div>
                         <div id="display-preparing" class="flex flex-wrap gap-4 content-start flex-1 overflow-y-auto">
-                            <!-- Contoh Dynamic Item -->
+                            <!-- Dynamic Item -->
                         </div>
                     </div>
 
@@ -127,7 +127,7 @@
                             <span class="bg-emerald-200 text-emerald-900 font-bold px-3 py-1 rounded-full text-sm">READY</span>
                         </div>
                         <div id="display-ready" class="flex flex-wrap gap-4 content-start flex-1 overflow-y-auto">
-                            <!-- Contoh Dynamic Item -->
+                            <!-- Dynamic Item -->
                         </div>
                     </div>
 
@@ -153,6 +153,11 @@
                 initSupabase(savedUrl, savedKey);
             }
             generateNextNumber();
+
+            // SINKRONISASI TAB: Semak URL Hash (#display / #kasir) atau localStorage
+            const currentHash = window.location.hash.replace('#', '');
+            const savedTab = currentHash || localStorage.getItem('active_tab') || 'kasir';
+            switchTab(savedTab);
         };
 
         function saveConfig() {
@@ -179,8 +184,12 @@
             document.getElementById('order-input').value = 'A-' + nextOrderNumber;
         }
 
-        // Navigasi penukaran paparan tab (Kasir / TV Display)
+        // Navigasi penukaran paparan tab (Kasir / TV Display) dengan memori auto-save
         function switchTab(tab) {
+            // Simpan status tab ke localStorage & URL Hash
+            localStorage.setItem('active_tab', tab);
+            window.location.hash = tab;
+
             if (tab === 'kasir') {
                 document.getElementById('tab-kasir').classList.remove('hidden');
                 document.getElementById('tab-display').classList.add('hidden');
