@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pickup Display (TV)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .pulse-ready {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col p-6">
+
+    <!-- Supabase Config Overlay (Jika belum diset) -->
+    <div id="config-screen" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 text-white p-6 rounded-2xl shadow-xl max-w-md w-full border border-slate-700">
+            <h2 class="text-xl font-bold mb-2">Setup TV Display (Supabase)</h2>
+            <p class="text-sm text-slate-400 mb-4">Masukkan URL dan API Key Supabase anda untuk paparan TV.</p>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Project URL</label>
+                    <input type="text" id="sb-url" placeholder="https://xyz.supabase.co" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Anon API Key</label>
+                    <input type="password" id="sb-key" placeholder="eyJhbGciOi..." class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button onclick="saveConfig()" class="w-full bg-blue-600 text-white font-medium p-2.5 rounded-lg hover:bg-blue-700 transition">
+                    Buka Paparan TV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TV Header -->
+    <header class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+        <h1 class="text-3xl font-black tracking-wider text-blue-400 uppercase">📺 PAPARAN ANTREAN PESANAN</h1>
+        <a href="index.html" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg border border-slate-700">⚙️ Ke Kasir POS</a>
+    </header>
+
+    <!-- Main Display Container -->
+    <main class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        <!-- Ruang Penyediaan (Preparing) -->
+        <div class="bg-slate-800/80 border border-amber-500/30 rounded-3xl p-6 flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center border-b-4 border-amber-500 pb-4 mb-6">
+                <h2 class="text-3xl font-black text-amber-400 tracking-wide uppercase">👨‍🍳 Sedang Disiapkan</h2>
+                <span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold px-4 py-1.5 rounded-full text-base">PREPARING</span>
+            </div>
+            <div id="display-preparing" class="flex flex-wrap gap-4 content-start flex-1 overflow-y-auto">
+                <!-- Nombor Pesanan Dinamik -->
+            </div>
+        </div>
+
+        <!-- Ruang Siap Sedia (Ready) -->
+        <div class="bg-slate-800/80 border border-emerald-500/30 rounded-3xl p-6 flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center border-b-4 border-emerald-500 pb-4 mb-6">
+                <h2 class="text-3xl font-black text-emerald-400 tracking-wide uppercase">🔔 Sila Ambil Pesanan</h2>
+                <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold px-4 py-1.5 rounded-full text-base">READY</span>
+            </div>
+            <div id="display-ready" class="flex flex-wrap gap-4 content-start flex-1 overflow-y-auto">
+                <!-- Nombor Pesanan Dinamik -->
+            </div>
+        </div>
+
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        let supabaseClient = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedUrl = localStorage.getItem('sb_url');
+            const savedKey = localStorage.getItem('sb_key');
+            if (savedUrl && savedKey) {
+                document.getElementById('sb-url').value = savedUrl;
+                document.getElementById('sb-key').value = savedKey;
+                initSupabase(savedUrl, savedKey);
+            }
+        });
+
+        function saveConfig() {
+            const url = document.getElementById('sb-url').value.trim();
+            const key = document.getElementById('sb-key').value.trim();
+            if(!url || !key) return alert('Sila isi URL dan Key');
+            
+            localStorage.setItem('sb_url', url);
+            localStorage.setItem('sb_key', key);
+            initSupabase(url, key);
+        }
+
+        function initSupabase(url, key) {
+            supabaseClient = supabase.createClient(url, key);
+            document.getElementById('config-screen').classList.add('hidden');
+            
+            fetchOrders();
+            subscribeRealtime();
+        }
+
+        async function fetchOrders() {
+            if(!supabaseClient) return;
+            const { data: orders, error } = await supabaseClient
+                .from('orders')
+                .select('*')
+                .in('status', ['preparing', 'ready'])
+                .order('created_at', { ascending: true });
+
+            if (error) return console.error(error);
+            renderDisplay(orders);
+        }
+
+        function subscribeRealtime() {
+            supabaseClient
+                .channel('schema-db-changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
+                    fetchOrders();
+                })
+                .subscribe();
+        }
+
+        function renderDisplay(orders) {
+            const prepDisplay = document.getElementById('display-preparing');
+            const readyDisplay = document.getElementById('display-ready');
+
+            prepDisplay.innerHTML = '';
+            readyDisplay.innerHTML = '';
+
+            orders.forEach(order => {
+                if(order.status === 'preparing') {
+                    prepDisplay.innerHTML += `
+                        <div class="bg-slate-700 text-amber-300 px-8 py-5 rounded-2xl shadow-md border border-amber-500/30 text-4xl font-black tracking-wider min-w-[120px] text-center">
+                            ${order.order_number}
+                        </div>
+                    `;
+                } else if(order.status === 'ready') {
+                    readyDisplay.innerHTML += `
+                        <div class="bg-emerald-600 text-white px-8 py-5 rounded-2xl shadow-xl text-4xl font-black tracking-wider min-w-[120px] text-center pulse-ready border-2 border-emerald-400">
+                            ${order.order_number}
+                        </div>
+                    `;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
